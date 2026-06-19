@@ -10,6 +10,7 @@ from django.core.cache import cache
 from .tasks import generate_invoice,send_notification,process_daily_sales_batch
 import logging
 import time
+import os
 
 logger =logging.getLogger(__name__)
 
@@ -59,7 +60,9 @@ def product_list(request):
     else:
         print("[CACHE] cahe hit _serived from edis")
         
-    return JsonResponse(list(data), safe=False)
+    response = JsonResponse(list(data), safe=False)
+    response['X-server-port']= os.environ.get('SERVER_PORT','unknown')
+    return response
 
 
 @api_view(['POST'])
@@ -79,10 +82,10 @@ def place_order(request):
         return JsonResponse({'error': 'Server busy, try again'}, status=503)
 
     try:
-        time.sleep(0.7)
+        
         with transaction.atomic():
             # Row-level locking to prevent race condition
-            product = Product.objects.select_for_update().get(id=product_id)
+            product = Product.objects.select_for_update(nowait=True).get(id=product_id)
 
             if product.stock < quantity:
                 return JsonResponse({'error': 'Out of stock'}, status=400)
